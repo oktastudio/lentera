@@ -1,8 +1,13 @@
 import Phaser from 'phaser';
 import { Colors, SceneKeys, TILE_SIZE } from '@/config/constants';
+import { ITEMS } from '@/data/items';
 import { MAPS, START_MAP_ID, START_SPAWN_ID } from '@/data/maps';
+import { pickupsFor, validatePickups, type MapPickup, type PickupReward } from '@/data/pickups';
 import { Player } from '@/entities/Player';
 import { InputSystem } from '@/systems/InputSystem';
+import { grantReward } from '@/systems/Rewards';
+import { worldFlags } from '@/systems/WorldFlags';
+import { PICKUP_TEXTURE, ensurePickupTexture } from '@/world/pickupTexture';
 import { TILE_DEFS } from '@/world/tiles';
 import type { MapData, MapExit } from '@/world/types';
 import { validateMap } from '@/world/validateMap';
@@ -13,6 +18,18 @@ interface WorldInitData {
 }
 
 const FADE_MS = 200;
+const FULL_TOAST_COOLDOWN_MS = 1500;
+
+function tintFor(reward: PickupReward): number {
+  switch (reward.kind) {
+    case 'gold':
+      return 0xffc857;
+    case 'exp':
+      return 0xb86fd1;
+    case 'item':
+      return Phaser.Display.Color.HexStringToColor(ITEMS[reward.itemId].color).color;
+  }
+}
 
 export class WorldScene extends Phaser.Scene {
   private player!: Player;
@@ -20,6 +37,7 @@ export class WorldScene extends Phaser.Scene {
   private mapData!: MapData;
   private spawnId = START_SPAWN_ID;
   private transitioning = false;
+  private pickupBlockedUntil = 0;
 
   constructor() {
     super(SceneKeys.World);
@@ -30,9 +48,11 @@ export class WorldScene extends Phaser.Scene {
     const map = MAPS[mapId] as MapData | undefined;
     if (!map) throw new Error(`Peta "${mapId}" tidak terdaftar`);
     validateMap(map);
+    validatePickups(map);
     this.mapData = map;
     this.spawnId = data?.spawnId ?? START_SPAWN_ID;
     this.transitioning = false;
+    this.pickupBlockedUntil = 0;
   }
 
   create(): void {
@@ -69,6 +89,8 @@ export class WorldScene extends Phaser.Scene {
     );
     this.physics.add.collider(this.player, walls);
 
+    this.spawnPickups();
+
     this.inputSystem = new InputSystem(this);
 
     const cam = this.cameras.main;
@@ -97,6 +119,49 @@ export class WorldScene extends Phaser.Scene {
     const tileY = Math.floor(this.player.y / TILE_SIZE);
     const exit = this.mapData.exits.find((e) => this.isInside(e, tileX, tileY));
     if (exit) this.goTo(exit);
+  }
+
+  private spawnPickups(): void {
+    ensurePickupTexture(this);
+    const group = this.physics.add.group({ allowGravity: false });
+    const entries = new Map<Phaser.GameObjects.GameObject, MapPickup>();
+
+    for (const p of pickupsFor(this.mapData.id)) {
+      if (worldFlags.isPickupCollected(this.mapData.id, p.id)) continue;
+
+      const x = p.tileX * TILE_SIZE + TILE_SIZE / 2;
+      const y = p.tileY * TILE_SIZE + TILE_SIZE / 2;
+      const sprite = group.create(x, y, PICKUP_TEXTURE) as Phaser.Physics.Arcade.Sprite;
+      sprite.setTint(tintFor(p.reward));
+      sprite.setDepth(y);
+      (sprite.body as Phaser.Physics.Arcade.Body).setSize(24, 24, true);
+      entries.set(sprite, p);
+
+      this.tweens.add({
+        targets: sprite,
+        y: y - 3,
+        duration: 600,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+    }
+
+    this.physics.add.overlap(this.player, group, (_player, obj) => {
+      if (this.time.now < this.pickupBlockedUntil) return;
+      const sprite = obj as Phaser.Physics.Arcade.Sprite;
+      const pickup = entries.get(sprite);
+      if (!pickup) return;
+
+      if (!grantReward(pickup.reward)) {
+        this.pickupBlockedUntil = this.time.now + FULL_TOAST_COOLDOWN_MS;
+        return;
+      }
+      worldFlags.collectPickup(this.mapData.id, pickup.id);
+      entries.delete(sprite);
+      this.tweens.killTweensOf(sprite);
+      sprite.destroy();
+    });
   }
 
   private isInside(e: MapExit, tileX: number, tileY: number): boolean {
