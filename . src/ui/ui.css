@@ -1,0 +1,277 @@
+/* UI HTML LENTERA: HUD, panel inventori, toast. Terpisah dari canvas Phaser. */
+
+#ui-root {
+  position: fixed;
+  inset: 0;
+  pointer-events: none; /* sentuhan tembus ke game, kecuali elemen yang diizinkan */
+  font-family: ui-monospace, 'Courier New', monospace;
+  font-size: 13px;
+  color: #fff3b0;
+  padding: env(safe-area-inset-top, 0) env(safe-area-inset-right, 0)
+    env(safe-area-inset-bottom, 0) env(safe-area-inset-left, 0);
+  box-sizing: border-box;
+}
+
+#ui-root button {
+  font: inherit;
+  color: inherit;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+/* ---------- HUD ---------- */
+.hud {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: min(42vmin, 210px);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.hud-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.hud-level {
+  font-weight: bold;
+}
+
+.hud-gold {
+  color: #ffc857;
+}
+
+.bar {
+  position: relative;
+  height: 12px;
+  background: rgba(11, 8, 32, 0.8);
+  border: 1px solid #5b4a8a;
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  width: 0;
+  transition: width 0.2s;
+}
+
+.bar-hp .bar-fill {
+  background: #e0735a;
+}
+.bar-mp .bar-fill {
+  background: #4aa3df;
+}
+.bar-exp .bar-fill {
+  background: #ffc857;
+}
+
+.bar-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  text-shadow: 0 0 2px #0b0820, 0 0 2px #0b0820;
+}
+
+.btn {
+  min-height: 40px;
+  padding: 6px 14px;
+  background: #2a1d52;
+  border: 2px solid #b86fd1;
+  border-radius: 6px;
+}
+.btn:active {
+  background: #3d2b78;
+}
+.btn[disabled] {
+  opacity: 0.4;
+}
+
+.hud-menu {
+  align-self: flex-end;
+  margin-top: 2px;
+}
+
+/* ---------- Panel inventori ---------- */
+.panel-backdrop {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(11, 8, 32, 0.78);
+  pointer-events: auto;
+  padding: 8px;
+  box-sizing: border-box;
+}
+.panel-backdrop.open {
+  display: flex;
+}
+
+.panel {
+  width: min(100%, 640px);
+  max-height: 100%;
+  overflow-y: auto;
+  background: #1a1236;
+  border: 2px solid #5b4a8a;
+  border-radius: 8px;
+  padding: 10px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.panel-title {
+  font-size: 16px;
+  font-weight: bold;
+}
+
+.panel-body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.panel-col {
+  flex: 1 1 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.section-title {
+  font-size: 11px;
+  opacity: 0.7;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.stat-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px 10px;
+}
+
+.equip-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 4px 8px;
+  background: #0b0820;
+  border: 1px solid #5b4a8a;
+  border-radius: 6px;
+  width: 100%;
+  text-align: left;
+}
+
+.equip-slot-name {
+  width: 64px;
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+.icon {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border: 2px solid #0b0820;
+  box-sizing: border-box;
+  border-radius: 4px;
+}
+
+.inv-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+}
+
+.slot {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  min-height: 44px;
+  background: #0b0820;
+  border: 1px solid #5b4a8a;
+  border-radius: 6px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.slot.selected {
+  border-color: #fff3b0;
+  box-shadow: 0 0 0 1px #fff3b0;
+}
+.slot .icon {
+  width: 60%;
+  height: 60%;
+}
+
+.slot-qty {
+  position: absolute;
+  right: 3px;
+  bottom: 1px;
+  font-size: 10px;
+  text-shadow: 0 0 2px #0b0820, 0 0 2px #0b0820;
+}
+
+.detail {
+  min-height: 70px;
+  padding: 8px;
+  background: #0b0820;
+  border: 1px solid #5b4a8a;
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.detail-name {
+  font-weight: bold;
+}
+.detail-desc {
+  opacity: 0.85;
+  line-height: 1.35;
+}
+.detail-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* ---------- Toast ---------- */
+.toast-wrap {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.toast {
+  background: rgba(26, 18, 54, 0.95);
+  border: 1px solid #b86fd1;
+  border-radius: 6px;
+  padding: 4px 12px;
+  animation: toast-fade 2.2s forwards;
+}
+@keyframes toast-fade {
+  0% { opacity: 0; transform: translateY(-6px); }
+  10% { opacity: 1; transform: translateY(0); }
+  80% { opacity: 1; }
+  100% { opacity: 0; }
+}
