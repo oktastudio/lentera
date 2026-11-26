@@ -38,6 +38,7 @@ export interface GameEvents {
     'dialogue:end': null;
   'interact:prompt': string | null;
   'interact:press': null;
+  'attack:press': null;
   toast: string;
 }
 
