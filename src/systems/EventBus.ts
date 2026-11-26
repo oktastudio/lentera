@@ -1,3 +1,4 @@
+import type { BattleEndInfo, BattleView } from '@/combat/TurnBattle';
 import type { CharacterSnapshot } from '@/systems/CharacterState';
 import type { DialogueView } from '@/systems/DialogueRunner';
 import type { QuestSnapshot } from '@/systems/QuestLog';
@@ -35,10 +36,13 @@ export interface GameEvents {
   'character:changed': CharacterSnapshot;
   'quest:changed': QuestSnapshot;
   'dialogue:show': DialogueView;
-    'dialogue:end': null;
+  'dialogue:end': null;
   'interact:prompt': string | null;
   'interact:press': null;
   'attack:press': null;
+  'battle:start': BattleView;
+  'battle:update': BattleView;
+  'battle:end': BattleEndInfo;
   toast: string;
 }
 
