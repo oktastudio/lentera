@@ -122,7 +122,30 @@ class CharacterState {
     this.changed();
     return true;
   }
+  countItem(itemId: string): number {
+    let total = 0;
+    for (const s of this.inventory) {
+      if (s.itemId === itemId) total += s.quantity;
+    }
+    return total;
+  }
 
+  // Mengembalikan false (tanpa mengubah apa pun) bila jumlahnya tidak cukup.
+  removeItem(itemId: string, quantity = 1): boolean {
+    if (quantity <= 0 || this.countItem(itemId) < quantity) return false;
+    let left = quantity;
+    for (let i = this.inventory.length - 1; i >= 0 && left > 0; i--) {
+      const slot = this.inventory[i];
+      if (slot.itemId !== itemId) continue;
+      const take = Math.min(slot.quantity, left);
+      slot.quantity -= take;
+      left -= take;
+      if (slot.quantity <= 0) this.inventory.splice(i, 1);
+    }
+    this.changed();
+    return true;
+  }
+  
   useItem(index: number): boolean {
     const slot = this.inventory[index] as InventorySlot | undefined;
     if (!slot) return false;
