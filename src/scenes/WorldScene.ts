@@ -447,8 +447,7 @@ export class WorldScene extends Phaser.Scene {
     gameBus.emit('interact:prompt', null);
     const cam = this.cameras.main;
     cam.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
-      this.scene.restart({ mapId: exit.toMap, spawnId: exit.toSpawn } satisfies WorldInitData });
-    });
+            this.scene.restart({ mapId: exit.toMap, spawnId: exit.toSpawn } satisfies WorldInitData);
     cam.fadeOut(FADE_MS, 11, 8, 32);
   }
 }
