@@ -35,7 +35,9 @@ export interface GameEvents {
   'character:changed': CharacterSnapshot;
   'quest:changed': QuestSnapshot;
   'dialogue:show': DialogueView;
-  'dialogue:end': null;
+    'dialogue:end': null;
+  'interact:prompt': string | null;
+  'interact:press': null;
   toast: string;
 }
 
