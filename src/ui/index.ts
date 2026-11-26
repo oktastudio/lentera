@@ -1,6 +1,10 @@
 import '@/ui/ui.css';
+import '@/ui/ui-extra.css';
+import { ActionButton } from '@/ui/ActionButton';
+import { DialogueBox } from '@/ui/DialogueBox';
 import { Hud } from '@/ui/Hud';
 import { InventoryPanel } from '@/ui/InventoryPanel';
+import { QuestTracker } from '@/ui/QuestTracker';
 import { Toasts } from '@/ui/Toasts';
 
 // Memasang seluruh UI HTML ke #ui-root.
@@ -14,5 +18,9 @@ export function mountUi(onPanelToggle: (open: boolean) => void): void {
     panel.toggle();
   });
   const toasts = new Toasts();
-  root.append(hud.root, toasts.root, panel.root);
+  const tracker = new QuestTracker();
+  const action = new ActionButton();
+  const dialogueBox = new DialogueBox();
+
+  root.append(hud.root, tracker.root, action.root, toasts.root, dialogueBox.root, panel.root);
 }
