@@ -2,7 +2,7 @@ import '@/ui/ui.css';
 import '@/ui/ui-extra.css';
 import '@/ui/ui-combat.css';
 import '@/ui/ui-battle.css';
-import { AccountFooter } from '@/ui/AccountFooter';
+import { createAccountFooter } from '@/ui/AccountFooter';
 import { ActionButton } from '@/ui/ActionButton';
 import { AttackButton } from '@/ui/AttackButton';
 import { BattleScreen } from '@/ui/BattleScreen';
