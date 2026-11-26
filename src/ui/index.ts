@@ -1,8 +1,10 @@
 import '@/ui/ui.css';
 import '@/ui/ui-extra.css';
 import '@/ui/ui-combat.css';
+import '@/ui/ui-battle.css';
 import { ActionButton } from '@/ui/ActionButton';
 import { AttackButton } from '@/ui/AttackButton';
+import { BattleScreen } from '@/ui/BattleScreen';
 import { DialogueBox } from '@/ui/DialogueBox';
 import { Hud } from '@/ui/Hud';
 import { InventoryPanel } from '@/ui/InventoryPanel';
@@ -24,14 +26,17 @@ export function mountUi(onPanelToggle: (open: boolean) => void): void {
   const action = new ActionButton();
   const attack = new AttackButton();
   const dialogueBox = new DialogueBox();
+  const battle = new BattleScreen();
 
+  // Urutan = tumpukan layar: yang terakhir paling atas. Notifikasi paling atas.
   root.append(
     hud.root,
     tracker.root,
     attack.root,
     action.root,
-    toasts.root,
     dialogueBox.root,
     panel.root,
+    battle.root,
+    toasts.root,
   );
 }
