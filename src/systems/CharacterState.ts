@@ -155,6 +155,66 @@ class CharacterState {
     this.hp = Math.min(this.getStats().maxHp, this.hp + amount);
     this.changed();
   }
+    exportState() {
+    return {
+      level: this.level,
+      exp: this.exp,
+      gold: this.gold,
+      hp: this.hp,
+      mp: this.mp,
+      inventory: this.inventory.map((s) => ({ itemId: s.itemId, quantity: s.quantity })),
+      equipment: { ...this.equipment },
+    };
+  }
+
+  // Memuat data simpanan. Semua nilai dibersihkan: level dibatasi, benda tak
+  // dikenal dibuang, equipment dicocokkan dengan slotnya.
+  importState(save: {
+    level: number;
+    exp: number;
+    gold: number;
+    hp: number;
+    mp: number;
+    inventory: ReadonlyArray<{ itemId: string; quantity: number }>;
+    equipment: Readonly<Record<string, string | undefined>>;
+  }): void {
+    this.level = Math.min(MAX_LEVEL, Math.max(1, Math.floor(save.level)));
+    this.exp =
+      this.level >= MAX_LEVEL
+        ? 0
+        : Math.min(Math.max(0, Math.floor(save.exp)), expToNext(this.level) - 1);
+    this.gold = Math.max(0, Math.floor(save.gold));
+
+    this.inventory.length = 0;
+    for (const s of save.inventory) {
+      const def = ITEMS[s.itemId] as ItemDef | undefined;
+      if (!def || this.inventory.length >= INVENTORY_CAPACITY) continue;
+      const qty = Math.max(1, Math.floor(s.quantity));
+      if (def.stackable) {
+        const existing = this.inventory.find((x) => x.itemId === s.itemId);
+        if (existing) existing.quantity += qty;
+        else this.inventory.push({ itemId: s.itemId, quantity: qty });
+      } else {
+        this.inventory.push({ itemId: s.itemId, quantity: 1 });
+      }
+    }
+
+    for (const key of Object.keys(this.equipment)) {
+      delete this.equipment[key as EquipSlot];
+    }
+    for (const [slotName, itemId] of Object.entries(save.equipment)) {
+      if (!itemId) continue;
+      const def = ITEMS[itemId] as ItemDef | undefined;
+      if (def && def.type === 'equipment' && def.slot === slotName) {
+        this.equipment[def.slot] = def.id;
+      }
+    }
+
+    const stats = this.getStats();
+    this.hp = Math.min(stats.maxHp, Math.max(1, Math.floor(save.hp)));
+    this.mp = Math.min(stats.maxMp, Math.max(0, Math.floor(save.mp)));
+    this.changed();
+  }
   
   countItem(itemId: string): number {
     let total = 0;
