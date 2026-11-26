@@ -1,18 +1,24 @@
 import Phaser from 'phaser';
 import { Colors, SceneKeys, TILE_SIZE } from '@/config/constants';
+import { DEFEAT_GOLD_PENALTY } from '@/data/combat';
 import { validateDialogues } from '@/data/dialogues';
 import { ITEMS } from '@/data/items';
 import { MAPS, START_MAP_ID, START_SPAWN_ID } from '@/data/maps';
+import { MONSTERS, monsterSpawnsFor, validateMonsters } from '@/data/monsters';
 import { npcsFor, validateNpcs } from '@/data/npcs';
 import { pickupsFor, validatePickups, type MapPickup, type PickupReward } from '@/data/pickups';
 import { validateQuests } from '@/data/quests';
+import { Monster } from '@/entities/Monster';
 import { Npc } from '@/entities/Npc';
 import { Player } from '@/entities/Player';
+import { character } from '@/systems/CharacterState';
+import { calculateDamage } from '@/systems/Damage';
 import { dialogue } from '@/systems/DialogueRunner';
 import { gameBus } from '@/systems/EventBus';
 import { InputSystem } from '@/systems/InputSystem';
 import { grantReward } from '@/systems/Rewards';
 import { worldFlags } from '@/systems/WorldFlags';
+import { ensureMonsterTexture } from '@/world/monsterTexture';
 import { ensureNpcTexture } from '@/world/npcTexture';
 import { PICKUP_TEXTURE, ensurePickupTexture } from '@/world/pickupTexture';
 import { TILE_DEFS } from '@/world/tiles';
@@ -25,6 +31,7 @@ interface WorldInitData {
 }
 
 const FADE_MS = 200;
+const DEFEAT_FADE_MS = 500;
 const FULL_TOAST_COOLDOWN_MS = 1500;
 const INTERACT_RADIUS = 30; // piksel, jarak pusat Nara ke pusat NPC
 
@@ -48,6 +55,9 @@ export class WorldScene extends Phaser.Scene {
   private pickupBlockedUntil = 0;
   private npcs: Npc[] = [];
   private nearNpc: Npc | null = null;
+  // Array ini dipakai langsung oleh collider, jadi jangan diganti dengan array
+  // baru setelah create(); monster yang mati dihapus dengan splice.
+  private monsters: Monster[] = [];
 
   constructor() {
     super(SceneKeys.World);
@@ -62,12 +72,14 @@ export class WorldScene extends Phaser.Scene {
     validateQuests();
     validateDialogues();
     validateNpcs(map);
+    validateMonsters(map);
     this.mapData = map;
     this.spawnId = data?.spawnId ?? START_SPAWN_ID;
     this.transitioning = false;
     this.pickupBlockedUntil = 0;
     this.npcs = [];
     this.nearNpc = null;
+    this.monsters = [];
   }
 
   create(): void {
@@ -105,6 +117,7 @@ export class WorldScene extends Phaser.Scene {
     this.physics.add.collider(this.player, walls);
 
     this.spawnNpcs();
+    this.spawnMonsters(walls);
     this.spawnPickups();
 
     this.inputSystem = new InputSystem(this);
@@ -139,9 +152,10 @@ export class WorldScene extends Phaser.Scene {
   update(): void {
     if (this.transitioning) return;
 
-    // Nara diam selama dialog berlangsung.
+    // Nara dan monster diam selama dialog berlangsung.
     if (dialogue.isActive) {
       this.player.setVelocity(0, 0);
+      this.freezeMonsters();
       return;
     }
 
@@ -155,6 +169,9 @@ export class WorldScene extends Phaser.Scene {
       return;
     }
 
+    this.updateMonsters();
+    if (this.transitioning) return;
+
     this.updateInteractPrompt();
   }
 
@@ -164,6 +181,76 @@ export class WorldScene extends Phaser.Scene {
     ensureNpcTexture(this);
     for (const def of defs) this.npcs.push(new Npc(this, def));
     this.physics.add.collider(this.player, this.npcs);
+  }
+
+  private spawnMonsters(walls: Phaser.Physics.Arcade.StaticGroup): void {
+    const spawns = monsterSpawnsFor(this.mapData.id);
+    if (spawns.length === 0) return;
+    ensureMonsterTexture(this);
+    const now = this.time.now;
+    for (const s of spawns) {
+      this.monsters.push(new Monster(this, MONSTERS[s.monsterId], s, now));
+    }
+    this.physics.add.collider(this.monsters, walls);
+    this.physics.add.collider(this.monsters, this.monsters);
+    this.physics.add.collider(this.player, this.monsters);
+    if (this.npcs.length > 0) this.physics.add.collider(this.monsters, this.npcs);
+  }
+
+  private updateMonsters(): void {
+    const now = this.time.now;
+    for (const m of this.monsters) {
+      if (m.think(this.player, now, !this.player.isInvulnerable())) {
+        this.hitPlayer(m);
+        if (this.transitioning) return;
+      }
+    }
+  }
+
+  private freezeMonsters(): void {
+    for (const m of this.monsters) m.setVelocity(0, 0);
+  }
+
+  private hitPlayer(monster: Monster): void {
+    const damage = calculateDamage(monster.def.attack, character.getStats().defense);
+    this.floatText(this.player.x, this.player.y - 12, `-${damage}`, '#ff8a7a');
+    this.player.hurt(monster.x, monster.y);
+    if (character.takeDamage(damage)) this.handleDefeat();
+  }
+
+  private handleDefeat(): void {
+    this.transitioning = true;
+    this.player.setVelocity(0, 0);
+    this.freezeMonsters();
+    this.nearNpc = null;
+    gameBus.emit('interact:prompt', null);
+
+    const mapId = this.mapData.id;
+    const spawnId = this.mapData.spawns[0].id;
+    const cam = this.cameras.main;
+    cam.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+      const lost = character.reviveAfterDefeat(DEFEAT_GOLD_PENALTY);
+      gameBus.emit('toast', lost > 0 ? `Nara kalah... -${lost} G` : 'Nara kalah...');
+      this.scene.restart({ mapId, spawnId } satisfies WorldInitData);
+    });
+    cam.fadeOut(DEFEAT_FADE_MS, 11, 8, 32);
+  }
+
+  // Teks angka melayang naik lalu hilang.
+  private floatText(x: number, y: number, text: string, color: string): void {
+    const label = this.add
+      .text(x, y, text, { fontFamily: 'monospace', fontSize: '8px', color })
+      .setOrigin(0.5, 1)
+      .setDepth(100000);
+    this.tweens.add({
+      targets: label,
+      y: y - 14,
+      alpha: 0,
+      duration: 600,
+      onComplete: () => {
+        label.destroy();
+      },
+    });
   }
 
   private updateInteractPrompt(): void {
@@ -243,6 +330,7 @@ export class WorldScene extends Phaser.Scene {
   private goTo(exit: MapExit): void {
     this.transitioning = true;
     this.player.setVelocity(0, 0);
+    this.freezeMonsters();
     this.nearNpc = null;
     gameBus.emit('interact:prompt', null);
     const cam = this.cameras.main;
