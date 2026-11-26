@@ -1,0 +1,66 @@
+/* Gaya Fase 6: layar login. */
+
+.login-backdrop {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #0b0820;
+  pointer-events: auto;
+  padding: 12px;
+  box-sizing: border-box;
+  overflow-y: auto;
+}
+
+.login-box {
+  width: min(100%, 360px);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  text-align: center;
+}
+
+.login-title {
+  font-size: 32px;
+  font-weight: bold;
+  letter-spacing: 6px;
+  color: #ffc857;
+}
+
+.login-subtitle {
+  opacity: 0.8;
+  margin-bottom: 8px;
+}
+
+.login-box .btn {
+  min-height: 52px;
+  font-size: 15px;
+}
+
+.login-box .btn.primary {
+  background: #5a1d3a;
+  border-color: #ffc857;
+}
+
+.login-hint {
+  font-size: 11px;
+  opacity: 0.7;
+  line-height: 1.4;
+}
+
+.login-status {
+  min-height: 16px;
+  color: #ff8a7a;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.login-box .login-link {
+  background: none;
+  border: none;
+  text-decoration: underline;
+  opacity: 0.8;
+  font-size: 12px;
+  min-height: 40px;
+}
