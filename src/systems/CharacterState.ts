@@ -122,6 +122,27 @@ class CharacterState {
     this.changed();
     return true;
   }
+  // Mengembalikan true bila HP Nara habis setelah serangan ini.
+  takeDamage(amount: number): boolean {
+    if (this.hp <= 0) return true;
+    if (amount <= 0) return false;
+    this.hp = Math.max(0, this.hp - amount);
+    this.changed();
+    return this.hp <= 0;
+  }
+
+  // Dipanggil setelah kalah: HP dan MP pulih penuh, sebagian gold hilang.
+  // Mengembalikan jumlah gold yang hilang.
+  reviveAfterDefeat(goldPenaltyRatio: number): number {
+    const stats = this.getStats();
+    this.hp = stats.maxHp;
+    this.mp = stats.maxMp;
+    const lost = Math.floor(this.gold * goldPenaltyRatio);
+    this.gold -= lost;
+    this.changed();
+    return lost;
+  }
+  
   countItem(itemId: string): number {
     let total = 0;
     for (const s of this.inventory) {
