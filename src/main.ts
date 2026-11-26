@@ -4,6 +4,9 @@ import { createGameConfig } from '@/config/gameConfig';
 import { STARTING_GOLD, STARTING_ITEMS } from '@/data/startingKit';
 import { chooseOffline, restoreSession, session } from '@/firebase/auth';
 import { isFirebaseConfigured } from '@/firebase/firebaseConfig';
+import { loadSave, type LoadResult } from '@/firebase/saves';
+import { autoSave } from '@/save/AutoSave';
+import { applySave } from '@/save/SaveData';
 import { character } from '@/systems/CharacterState';
 import { gameBus } from '@/systems/EventBus';
 import { mountUi } from '@/ui/index';
@@ -33,6 +36,53 @@ async function chooseAccount(): Promise<void> {
   await askLogin();
 }
 
+function giveStartingKit(): void {
+  character.addGold(STARTING_GOLD);
+  for (const item of STARTING_ITEMS) character.addItem(item.id, item.qty);
+}
+
+// Memuat simpanan pemain, atau memulai permainan baru. Simpan otomatis hanya
+// dinyalakan bila simpanan berhasil dibaca (atau memang belum ada), supaya
+// data lama di server tidak pernah tertimpa karena kegagalan memuat.
+async function startSession(): Promise<void> {
+  const uid = session.uid;
+  if (session.mode === 'offline' || !uid) {
+    giveStartingKit();
+    return;
+  }
+
+  gameBus.emit('toast', 'Memuat progres...');
+  let result: LoadResult;
+  try {
+    result = await loadSave(uid);
+  } catch (error) {
+    console.error('Gagal memuat simpanan', error);
+    giveStartingKit();
+    gameBus.emit('toast', 'Gagal memuat simpanan. Progres kali ini tidak akan disimpan.');
+    return;
+  }
+
+  switch (result.kind) {
+    case 'ok':
+      applySave(result.data);
+      autoSave.start(uid);
+      gameBus.emit('toast', 'Progres dimuat');
+      break;
+    case 'none':
+      giveStartingKit();
+      autoSave.start(uid);
+      autoSave.requestSave();
+      break;
+    case 'invalid':
+      giveStartingKit();
+      gameBus.emit(
+        'toast',
+        'Simpanan tidak bisa dibaca. Penyimpanan otomatis dimatikan agar data lama aman.',
+      );
+      break;
+  }
+}
+
 async function main(): Promise<void> {
   // Game dijeda selama panel Tas terbuka.
   mountUi((open) => {
@@ -49,10 +99,7 @@ async function main(): Promise<void> {
   });
 
   await chooseAccount();
-
-  // Bekal uji coba (sementara). Diganti data simpanan di langkah berikutnya.
-  character.addGold(STARTING_GOLD);
-  for (const item of STARTING_ITEMS) character.addItem(item.id, item.qty);
+  await startSession();
 
   game = new Phaser.Game(createGameConfig(computeZoom()));
 
