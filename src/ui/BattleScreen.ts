@@ -44,6 +44,7 @@ export class BattleScreen {
   private readonly mp = makeBar('bar bar-mp');
   private readonly menuBox = el('div', 'battle-menu');
   private menu: Menu = 'main';
+  private lastView: BattleView | null = null;
 
   constructor() {
     const panel = el('div', 'battle-panel');
@@ -67,10 +68,13 @@ export class BattleScreen {
     });
     gameBus.on('battle:end', () => {
       this.root.classList.remove('open');
+      this.lastView = null;
     });
   }
 
   private render(view: BattleView): void {
+    this.lastView = view;
+
     this.enemyName.textContent = view.enemyName;
     setBar(this.enemyBar, view.enemyHp, view.enemyMaxHp, `${view.enemyHp}/${view.enemyMaxHp}`);
     setBar(this.hp, view.playerHp, view.playerMaxHp, `HP ${view.playerHp}/${view.playerMaxHp}`);
@@ -86,6 +90,11 @@ export class BattleScreen {
     this.result.classList.toggle('show', view.outcome !== null);
 
     this.renderMenu(view);
+  }
+
+  private showMenu(menu: Menu): void {
+    this.menu = menu;
+    if (this.lastView) this.renderMenu(this.lastView);
   }
 
   private renderMenu(view: BattleView): void {
@@ -123,15 +132,13 @@ export class BattleScreen {
       );
 
       const skill = this.button('Skill', () => {
-        this.menu = 'skills';
-        this.renderMenu(view);
+        this.showMenu('skills');
       });
       skill.disabled = view.skills.length === 0;
       buttons.push(skill);
 
       const item = this.button('Item', () => {
-        this.menu = 'items';
-        this.renderMenu(view);
+        this.showMenu('items');
       });
       item.disabled = view.items.length === 0;
       buttons.push(item);
@@ -159,9 +166,7 @@ export class BattleScreen {
 
   private backButton(): HTMLButtonElement {
     const back = this.button('Kembali', () => {
-      this.menu = 'main';
-      const view = this.lastViewFromDom();
-      if (view) this.renderMenu(view);
+      this.showMenu('main');
     });
     back.classList.add('wide');
     return back;
