@@ -142,6 +142,19 @@ class CharacterState {
     this.changed();
     return lost;
   }
+  // Mengembalikan false (tanpa mengubah apa pun) bila MP tidak cukup.
+  spendMp(amount: number): boolean {
+    if (amount < 0 || this.mp < amount) return false;
+    this.mp -= amount;
+    this.changed();
+    return true;
+  }
+
+  restoreHp(amount: number): void {
+    if (amount <= 0) return;
+    this.hp = Math.min(this.getStats().maxHp, this.hp + amount);
+    this.changed();
+  }
   
   countItem(itemId: string): number {
     let total = 0;
