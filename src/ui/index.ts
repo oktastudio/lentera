@@ -3,6 +3,7 @@ import '@/ui/ui-extra.css';
 import '@/ui/ui-combat.css';
 import '@/ui/ui-battle.css';
 import { createAccountFooter } from '@/ui/AccountFooter';
+import { createDisplayFooter } from '@/ui/DisplayFooter';
 import { ActionButton } from '@/ui/ActionButton';
 import { AttackButton } from '@/ui/AttackButton';
 import { BattleScreen } from '@/ui/BattleScreen';
@@ -32,7 +33,7 @@ export function mountUi(onPanelToggle: (open: boolean) => void): void {
   const saveBadge = new SaveBadge();
 
   // Bagian akun ditaruh di bawah isi panel Tas.
-  panel.root.querySelector('.panel')?.append(createAccountFooter());
+    panel.root.querySelector('.panel')?.append(createDisplayFooter(), createAccountFooter());
 
   // Urutan = tumpukan layar: yang terakhir paling atas. Notifikasi paling atas.
   root.append(
