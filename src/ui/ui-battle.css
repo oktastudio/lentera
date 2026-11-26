@@ -1,0 +1,105 @@
+/* Gaya Fase 5: layar pertarungan giliran. */
+
+.battle-backdrop {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(11, 8, 32, 0.95);
+  pointer-events: auto;
+  padding: 8px;
+  box-sizing: border-box;
+}
+.battle-backdrop.open {
+  display: flex;
+}
+
+.battle-panel {
+  width: min(100%, 760px);
+  max-height: 100%;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+@media (max-width: 559px) {
+  .battle-panel {
+    grid-template-columns: 1fr;
+  }
+}
+
+.battle-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.battle-enemy-name {
+  font-weight: bold;
+  font-size: 15px;
+  color: #ffc857;
+}
+
+.bar-enemy {
+  height: 16px;
+}
+.bar-enemy .bar-fill {
+  background: #b86fd1;
+}
+
+.battle-log {
+  min-height: 96px;
+  max-height: 40vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 6px 8px;
+  background: #0b0820;
+  border: 1px solid #5b4a8a;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.35;
+}
+.battle-line {
+  opacity: 0.8;
+}
+.battle-line:last-child {
+  opacity: 1;
+  font-weight: bold;
+}
+
+.battle-telegraph {
+  display: none;
+  color: #ff8a7a;
+  font-weight: bold;
+  font-size: 12px;
+}
+.battle-telegraph.show {
+  display: block;
+}
+
+.battle-result {
+  display: none;
+  font-size: 16px;
+  font-weight: bold;
+  text-align: center;
+  color: #9ad7ff;
+}
+.battle-result.show {
+  display: block;
+}
+
+.battle-menu {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.battle-menu .btn {
+  min-height: 48px;
+}
+.battle-menu .wide {
+  grid-column: 1 / -1;
+}
