@@ -439,7 +439,7 @@ export class WorldScene extends Phaser.Scene {
     );
   }
 
-    private goTo(exit: MapExit): void {
+  private goTo(exit: MapExit): void {
     this.transitioning = true;
     this.player.setVelocity(0, 0);
     this.freezeMonsters();
