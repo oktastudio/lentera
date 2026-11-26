@@ -1,8 +1,6 @@
 import Phaser from 'phaser';
-import { battleManager } from '@/combat/BattleManager';
 import { GAME_HEIGHT, GAME_WIDTH } from '@/config/constants';
 import { createGameConfig } from '@/config/gameConfig';
-import { BOSSES } from '@/data/bosses';
 import { STARTING_GOLD, STARTING_ITEMS } from '@/data/startingKit';
 import { character } from '@/systems/CharacterState';
 import { gameBus } from '@/systems/EventBus';
@@ -35,15 +33,6 @@ gameBus.on('battle:start', () => {
 gameBus.on('battle:end', () => {
   game.resume();
 });
-
-// ALAT UJI SEMENTARA: buka alamat game dengan tambahan ?uji-boss
-// untuk langsung masuk ke pertarungan boss. Dihapus setelah file 24.
-if (new URLSearchParams(window.location.search).has('uji-boss')) {
-  gameBus.on('battle:end', (info) => {
-    if (info.outcome === 'defeat') character.reviveAfterDefeat(0);
-  });
-  battleManager.start(BOSSES.penunggu_jam);
-}
 
 window.addEventListener('resize', () => {
   game.scale.setZoom(computeZoom());
