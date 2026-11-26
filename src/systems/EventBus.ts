@@ -1,4 +1,6 @@
 import type { CharacterSnapshot } from '@/systems/CharacterState';
+import type { DialogueView } from '@/systems/DialogueRunner';
+import type { QuestSnapshot } from '@/systems/QuestLog';
 
 // Penghubung antara gameplay (Phaser) dan UI (HTML).
 // Kedua sisi hanya saling bicara lewat event, tidak saling mengimpor.
@@ -31,6 +33,9 @@ export class TypedEmitter<E extends object> {
 
 export interface GameEvents {
   'character:changed': CharacterSnapshot;
+  'quest:changed': QuestSnapshot;
+  'dialogue:show': DialogueView;
+  'dialogue:end': null;
   toast: string;
 }
 
