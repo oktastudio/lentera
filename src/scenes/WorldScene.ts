@@ -1,5 +1,8 @@
 import Phaser from 'phaser';
+import { battleManager } from '@/combat/BattleManager';
+import type { BattleEndInfo } from '@/combat/TurnBattle';
 import { Colors, SceneKeys, TILE_SIZE } from '@/config/constants';
+import { bossSpawnsFor, BOSSES, validateBosses } from '@/data/bosses';
 import {
   DEFEAT_GOLD_PENALTY,
   PLAYER_ATTACK_COOLDOWN_MS,
@@ -14,6 +17,8 @@ import { MONSTERS, monsterSpawnsFor, validateMonsters } from '@/data/monsters';
 import { npcsFor, validateNpcs } from '@/data/npcs';
 import { pickupsFor, validatePickups, type MapPickup, type PickupReward } from '@/data/pickups';
 import { validateQuests } from '@/data/quests';
+import { validateSkills } from '@/data/skills';
+import { BossActor } from '@/entities/BossActor';
 import { Monster } from '@/entities/Monster';
 import { Npc } from '@/entities/Npc';
 import { Player } from '@/entities/Player';
@@ -36,10 +41,15 @@ interface WorldInitData {
   spawnId?: string;
 }
 
+type InteractTarget =
+  | { readonly kind: 'npc'; readonly npc: Npc }
+  | { readonly kind: 'boss'; readonly boss: BossActor };
+
 const FADE_MS = 200;
 const DEFEAT_FADE_MS = 500;
 const FULL_TOAST_COOLDOWN_MS = 1500;
 const INTERACT_RADIUS = 30; // piksel, jarak pusat Nara ke pusat NPC
+const BOSS_INTERACT_RADIUS = 42; // boss bertubuh lebih besar
 const MONSTER_HIT_PADDING = 6; // tambahan jangkauan karena tubuh monster punya lebar
 
 function tintFor(reward: PickupReward): number {
@@ -53,6 +63,11 @@ function tintFor(reward: PickupReward): number {
   }
 }
 
+function targetKey(t: InteractTarget | null): string | null {
+  if (!t) return null;
+  return t.kind === 'npc' ? `npc:${t.npc.def.id}` : `boss:${t.boss.spawnId}`;
+}
+
 export class WorldScene extends Phaser.Scene {
   private player!: Player;
   private inputSystem!: InputSystem;
@@ -62,11 +77,13 @@ export class WorldScene extends Phaser.Scene {
   private pickupBlockedUntil = 0;
   private attackReadyAt = 0;
   private npcs: Npc[] = [];
-  private nearNpc: Npc | null = null;
+  private nearTarget: InteractTarget | null = null;
+  private activeBoss: BossActor | null = null;
   private attackKeys: Phaser.Input.Keyboard.Key[] = [];
   // Array ini dipakai langsung oleh collider, jadi jangan diganti dengan array
-  // baru setelah create(); monster yang mati dihapus dengan splice.
+  // baru setelah create(); yang mati dihapus dengan splice.
   private monsters: Monster[] = [];
+  private bosses: BossActor[] = [];
 
   constructor() {
     super(SceneKeys.World);
@@ -82,15 +99,19 @@ export class WorldScene extends Phaser.Scene {
     validateDialogues();
     validateNpcs(map);
     validateMonsters(map);
+    validateSkills();
+    validateBosses(map);
     this.mapData = map;
     this.spawnId = data?.spawnId ?? START_SPAWN_ID;
     this.transitioning = false;
     this.pickupBlockedUntil = 0;
     this.attackReadyAt = 0;
     this.npcs = [];
-    this.nearNpc = null;
+    this.nearTarget = null;
+    this.activeBoss = null;
     this.attackKeys = [];
     this.monsters = [];
+    this.bosses = [];
   }
 
   create(): void {
@@ -129,6 +150,7 @@ export class WorldScene extends Phaser.Scene {
 
     this.spawnNpcs();
     this.spawnMonsters(walls);
+    this.spawnBosses();
     this.spawnPickups();
 
     this.inputSystem = new InputSystem(this);
@@ -150,9 +172,13 @@ export class WorldScene extends Phaser.Scene {
     const offAttack = gameBus.on('attack:press', () => {
       this.performAttack();
     });
+    const offBattleEnd = gameBus.on('battle:end', (info) => {
+      this.onBattleEnd(info);
+    });
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       offPress();
       offAttack();
+      offBattleEnd();
       gameBus.emit('interact:prompt', null);
     });
 
@@ -177,8 +203,8 @@ export class WorldScene extends Phaser.Scene {
     const attackPressed = this.consumeAttackKeys();
     if (this.transitioning) return;
 
-    // Nara dan monster diam selama dialog berlangsung.
-    if (dialogue.isActive) {
+    // Nara dan monster diam selama dialog atau pertarungan giliran berlangsung.
+    if (dialogue.isActive || battleManager.isActive) {
       this.player.setVelocity(0, 0);
       this.freezeMonsters();
       return;
@@ -231,6 +257,19 @@ export class WorldScene extends Phaser.Scene {
     if (this.npcs.length > 0) this.physics.add.collider(this.monsters, this.npcs);
   }
 
+  private spawnBosses(): void {
+    const spawns = bossSpawnsFor(this.mapData.id);
+    if (spawns.length === 0) return;
+    ensureMonsterTexture(this);
+    for (const s of spawns) {
+      if (worldFlags.isBossDefeated(this.mapData.id, s.id)) continue;
+      this.bosses.push(new BossActor(this, BOSSES[s.bossId], s));
+    }
+    if (this.bosses.length === 0) return;
+    this.physics.add.collider(this.player, this.bosses);
+    if (this.monsters.length > 0) this.physics.add.collider(this.monsters, this.bosses);
+  }
+
   private updateMonsters(): void {
     const now = this.time.now;
     for (const m of this.monsters) {
@@ -246,7 +285,7 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private performAttack(): void {
-    if (this.transitioning || dialogue.isActive) return;
+    if (this.transitioning || dialogue.isActive || battleManager.isActive) return;
     const now = this.time.now;
     if (now < this.attackReadyAt) return;
     this.attackReadyAt = now + PLAYER_ATTACK_COOLDOWN_MS;
@@ -306,7 +345,7 @@ export class WorldScene extends Phaser.Scene {
     this.transitioning = true;
     this.player.setVelocity(0, 0);
     this.freezeMonsters();
-    this.nearNpc = null;
+    this.nearTarget = null;
     gameBus.emit('interact:prompt', null);
 
     const mapId = this.mapData.id;
@@ -318,6 +357,27 @@ export class WorldScene extends Phaser.Scene {
       this.scene.restart({ mapId, spawnId } satisfies WorldInitData);
     });
     cam.fadeOut(DEFEAT_FADE_MS, 11, 8, 32);
+  }
+
+  // Dipanggil setelah layar pertarungan giliran ditutup.
+  private onBattleEnd(info: BattleEndInfo): void {
+    const boss = this.activeBoss;
+    this.activeBoss = null;
+    this.nearTarget = null; // supaya tombol aksi dihitung ulang
+
+    if (info.outcome === 'defeat') {
+      this.handleDefeat();
+      return;
+    }
+
+    if (info.outcome === 'victory' && boss) {
+      worldFlags.defeatBoss(this.mapData.id, boss.spawnId);
+      const index = this.bosses.indexOf(boss);
+      if (index >= 0) this.bosses.splice(index, 1);
+      this.puffEffect(boss.x, boss.y, boss.def.tint);
+      boss.destroy();
+      gameBus.emit('interact:prompt', null);
+    }
   }
 
   // Lingkaran cahaya singkat di area pukulan.
@@ -334,7 +394,7 @@ export class WorldScene extends Phaser.Scene {
     });
   }
 
-  // Kepulan kecil saat monster kalah.
+  // Kepulan kecil saat monster atau boss kalah.
   private puffEffect(x: number, y: number, color: number): void {
     const puff = this.add.circle(x, y, 8, color, 0.8).setDepth(100000);
     this.tweens.add({
@@ -365,26 +425,51 @@ export class WorldScene extends Phaser.Scene {
     });
   }
 
-  private updateInteractPrompt(): void {
-    let nearest: Npc | null = null;
-    let best = INTERACT_RADIUS;
+  // Mencari NPC atau boss terdekat yang cukup dekat untuk diajak berinteraksi.
+  private findTarget(): InteractTarget | null {
+    let found: InteractTarget | null = null;
+    let bestDist = Infinity;
+
     for (const npc of this.npcs) {
       const d = Phaser.Math.Distance.Between(this.player.x, this.player.y, npc.x, npc.y);
-      if (d <= best) {
-        best = d;
-        nearest = npc;
+      if (d <= INTERACT_RADIUS && d < bestDist) {
+        bestDist = d;
+        found = { kind: 'npc', npc };
       }
     }
-    if (nearest !== this.nearNpc) {
-      this.nearNpc = nearest;
-      gameBus.emit('interact:prompt', nearest ? 'Bicara' : null);
+    for (const boss of this.bosses) {
+      const d = Phaser.Math.Distance.Between(this.player.x, this.player.y, boss.x, boss.y);
+      if (d <= BOSS_INTERACT_RADIUS && d < bestDist) {
+        bestDist = d;
+        found = { kind: 'boss', boss };
+      }
+    }
+    return found;
+  }
+
+  private updateInteractPrompt(): void {
+    const target = this.findTarget();
+    if (targetKey(target) === targetKey(this.nearTarget)) return;
+    this.nearTarget = target;
+    if (!target) {
+      gameBus.emit('interact:prompt', null);
+    } else {
+      gameBus.emit('interact:prompt', target.kind === 'npc' ? 'Bicara' : 'Tantang');
     }
   }
 
   private onInteractPress(): void {
-    if (this.transitioning || dialogue.isActive || !this.nearNpc) return;
+    if (this.transitioning || dialogue.isActive || battleManager.isActive) return;
+    const target = this.nearTarget;
+    if (!target) return;
+
     this.player.setVelocity(0, 0);
-    dialogue.startForNpc(this.nearNpc.def);
+    if (target.kind === 'npc') {
+      dialogue.startForNpc(target.npc.def);
+    } else {
+      this.activeBoss = target.boss;
+      battleManager.start(target.boss.def);
+    }
   }
 
   private spawnPickups(): void {
@@ -443,7 +528,7 @@ export class WorldScene extends Phaser.Scene {
     this.transitioning = true;
     this.player.setVelocity(0, 0);
     this.freezeMonsters();
-    this.nearNpc = null;
+    this.nearTarget = null;
     gameBus.emit('interact:prompt', null);
     const cam = this.cameras.main;
     cam.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
