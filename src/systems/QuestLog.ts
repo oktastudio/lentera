@@ -67,6 +67,21 @@ class QuestLog {
     this.changed();
     return true;
   }
+    exportState(): { started: string[]; finished: string[] } {
+    return { started: [...this.started], finished: [...this.finished] };
+  }
+
+  importState(save: { started: readonly string[]; finished: readonly string[] }): void {
+    this.started.clear();
+    this.finished.clear();
+    for (const id of save.finished) {
+      if (id in QUESTS) this.finished.add(id);
+    }
+    for (const id of save.started) {
+      if (id in QUESTS && !this.finished.has(id)) this.started.add(id);
+    }
+    this.changed();
+  }
 
   snapshot(): QuestSnapshot {
     const quests: QuestView[] = [];
