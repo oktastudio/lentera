@@ -1,0 +1,99 @@
+/* Gaya tambahan Fase 3: dialog, tombol aksi, pencatat quest. */
+
+/* ---------- Kotak dialog ---------- */
+.dialogue-box {
+  position: absolute;
+  left: 50%;
+  bottom: 8px;
+  transform: translateX(-50%);
+  width: min(calc(100% - 16px), 640px);
+  box-sizing: border-box;
+  display: none;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  background: #1a1236;
+  border: 2px solid #b86fd1;
+  border-radius: 8px;
+  pointer-events: auto;
+}
+.dialogue-box.open {
+  display: flex;
+}
+.dialogue-speaker {
+  font-weight: bold;
+  color: #ffc857;
+}
+.dialogue-text {
+  font-size: 14px;
+  line-height: 1.45;
+}
+.dialogue-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.dialogue-choices:empty {
+  display: none;
+}
+.dialogue-hint {
+  align-self: flex-end;
+  font-size: 11px;
+  opacity: 0.7;
+  animation: hint-blink 1.2s infinite;
+}
+@keyframes hint-blink {
+  50% { opacity: 0.25; }
+}
+
+/* ---------- Tombol aksi ---------- */
+.action-btn {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: #2a1d52;
+  border: 3px solid #fff3b0;
+  font-weight: bold;
+  font-size: 13px;
+  pointer-events: auto;
+}
+.action-btn.visible {
+  display: flex;
+}
+.action-btn:active {
+  background: #3d2b78;
+}
+
+/* ---------- Pencatat quest ---------- */
+.quest-tracker {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  width: min(220px, 45vw);
+  display: none;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 8px;
+  background: rgba(11, 8, 32, 0.72);
+  border: 1px solid #5b4a8a;
+  border-radius: 6px;
+  font-size: 11px;
+  line-height: 1.4;
+  box-sizing: border-box;
+}
+.quest-tracker.visible {
+  display: flex;
+}
+.quest-name {
+  font-weight: bold;
+  color: #ffc857;
+}
+.quest-ready {
+  color: #9ad7ff;
+}
