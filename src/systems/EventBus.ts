@@ -1,4 +1,5 @@
 import type { BattleEndInfo, BattleView } from '@/combat/TurnBattle';
+import type { SaveStatus } from '@/save/AutoSave';
 import type { CharacterSnapshot } from '@/systems/CharacterState';
 import type { DialogueView } from '@/systems/DialogueRunner';
 import type { QuestSnapshot } from '@/systems/QuestLog';
@@ -43,6 +44,7 @@ export interface GameEvents {
   'battle:start': BattleView;
   'battle:update': BattleView;
   'battle:end': BattleEndInfo;
+  'save:status': SaveStatus;
   toast: string;
 }
 
