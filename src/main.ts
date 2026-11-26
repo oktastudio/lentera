@@ -11,8 +11,12 @@ import { character } from '@/systems/CharacterState';
 import { gameBus } from '@/systems/EventBus';
 import { mountUi } from '@/ui/index';
 import { askLogin } from '@/ui/LoginScreen';
+import { initInstall } from '@/pwa/install';
+import { registerServiceWorker } from '@/pwa/register';
 
 let game: Phaser.Game | null = null;
+initInstall();
+registerServiceWorker();
 
 // Integer scaling: zoom selalu bilangan bulat supaya pixel art tetap tajam.
 function computeZoom(): number {
