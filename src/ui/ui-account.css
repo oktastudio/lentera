@@ -1,0 +1,45 @@
+/* Gaya Fase 6: lencana simpan dan bagian akun di dalam Tas. */
+
+.save-badge {
+  position: absolute;
+  left: 8px;
+  top: 44px;
+  display: none;
+  font-size: 10px;
+  opacity: 0.65;
+  pointer-events: none;
+}
+.save-badge.show {
+  display: block;
+}
+.save-badge.error {
+  color: #ff8a7a;
+  opacity: 1;
+}
+
+.account-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #5b4a8a;
+  font-size: 12px;
+}
+.account-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.account-footer .btn {
+  min-height: 40px;
+  font-size: 12px;
+}
+.account-status {
+  width: 100%;
+  color: #ff8a7a;
+  line-height: 1.4;
+}
+.account-status:empty {
+  display: none;
+}
