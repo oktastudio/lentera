@@ -38,7 +38,7 @@ export class Monster extends Phaser.Physics.Arcade.Sprite {
     const body = this.body as Phaser.Physics.Arcade.Body;
     body.setSize(12, 10);
     body.setOffset(1, 2);
-    body.setPushable(false);
+    body.pushable = false;
 
     this.barBg = scene.add
       .rectangle(x, y - BAR_OFFSET_Y, BAR_WIDTH, BAR_HEIGHT, 0x1a1236)
