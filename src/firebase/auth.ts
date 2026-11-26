@@ -1,5 +1,12 @@
 import { FirebaseError } from 'firebase/app';
-import { GoogleAuthProvider, signInAnonymously, signInWithPopup, signOut, type User } from 'firebase/auth';
+import {
+  GoogleAuthProvider,
+  linkWithPopup,
+  signInAnonymously,
+  signInWithPopup,
+  signOut,
+  type User,
+} from 'firebase/auth';
 import { auth } from '@/firebase/app';
 
 export type SessionMode = 'offline' | 'guest' | 'google';
@@ -10,7 +17,7 @@ export interface SessionInfo {
   label: string;
 }
 
-// Siapa yang sedang bermain. Dibaca oleh sistem simpanan di langkah berikutnya.
+// Siapa yang sedang bermain. Dibaca oleh sistem simpanan dan UI akun.
 export const session: SessionInfo = { mode: 'offline', uid: null, label: 'Offline' };
 
 function applyUser(user: User): void {
@@ -35,6 +42,14 @@ export async function signInGuest(): Promise<void> {
 
 export async function signInGoogle(): Promise<void> {
   const cred = await signInWithPopup(auth, new GoogleAuthProvider());
+  applyUser(cred.user);
+}
+
+// Menghubungkan akun tamu ke Google. ID pemain tetap sama, jadi progres aman.
+export async function linkGoogle(): Promise<void> {
+  const user = auth.currentUser;
+  if (!user || !user.isAnonymous) throw new Error('Tidak ada akun tamu untuk dihubungkan');
+  const cred = await linkWithPopup(user, new GoogleAuthProvider());
   applyUser(cred.user);
 }
 
@@ -64,6 +79,9 @@ export function describeAuthError(error: unknown): string {
         return 'Metode login ini belum diaktifkan di Firebase (Authentication > Sign-in method).';
       case 'auth/network-request-failed':
         return 'Tidak ada koneksi internet. Coba lagi.';
+      case 'auth/credential-already-in-use':
+      case 'auth/provider-already-linked':
+        return 'Akun Google itu sudah punya progres sendiri. Keluar, lalu masuk dengan Google untuk membukanya.';
       case 'auth/invalid-api-key':
       case 'auth/api-key-not-valid.-please-pass-a-valid-api-key.':
         return 'Konfigurasi Firebase salah. Periksa isi firebaseConfig.ts.';
