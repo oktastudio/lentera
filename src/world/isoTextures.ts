@@ -58,7 +58,7 @@ function putTexture(
   key: string,
   width: number,
   height: number,
-  data: Uint8ClampedArray,
+    data: Uint8ClampedArray<ArrayBuffer>,
 ): void {
   const texture = scene.textures.createCanvas(key, width, height);
   if (!texture) throw new Error(`Tekstur "${key}" gagal dibuat`);
