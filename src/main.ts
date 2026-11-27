@@ -13,6 +13,8 @@ import { mountUi } from '@/ui/index';
 import { askLogin } from '@/ui/LoginScreen';
 import { initInstall } from '@/pwa/install';
 import { registerServiceWorker } from '@/pwa/register';
+import { installRegions } from '@/data/regions/install';
+import { installErrorOverlay } from '@/ui/errorOverlay';
 
 let game: Phaser.Game | null = null;
 initInstall();
