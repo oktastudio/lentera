@@ -29,6 +29,8 @@ import { gameBus } from '@/systems/EventBus';
 import { InputSystem } from '@/systems/InputSystem';
 import { grantReward } from '@/systems/Rewards';
 import { worldFlags } from '@/systems/WorldFlags';
+import { depthOf, ISO_TILE_H, isoBounds, project } from '@/world/iso';
+import { BLANK_TEXTURE, isoTileInfo, SHADOW_TEXTURE } from '@/world/isoTextures';
 import { ensureMonsterTexture } from '@/world/monsterTexture';
 import { ensureNpcTexture } from '@/world/npcTexture';
 import { PICKUP_TEXTURE, ensurePickupTexture } from '@/world/pickupTexture';
@@ -45,12 +47,22 @@ type InteractTarget =
   | { readonly kind: 'npc'; readonly npc: Npc }
   | { readonly kind: 'boss'; readonly boss: BossActor };
 
+interface PickupEntry {
+  readonly pickup: MapPickup;
+  readonly gem: Phaser.GameObjects.Image;
+  readonly shadow: Phaser.GameObjects.Image;
+}
+
 const FADE_MS = 200;
 const DEFEAT_FADE_MS = 500;
 const FULL_TOAST_COOLDOWN_MS = 1500;
-const INTERACT_RADIUS = 30; // piksel, jarak pusat Nara ke pusat NPC
+const INTERACT_RADIUS = 30; // piksel di ruang dunia, jarak Nara ke NPC
 const BOSS_INTERACT_RADIUS = 42; // boss bertubuh lebih besar
 const MONSTER_HIT_PADDING = 6; // tambahan jangkauan karena tubuh monster punya lebar
+const CAMERA_TOP_PADDING = 48; // ruang di atas peta untuk blok yang menjulang
+const GROUND_DEPTH = -100000; // semua tile datar selalu di bawah segalanya
+const EFFECT_DEPTH = 1000000; // efek dan angka melayang selalu di atas dunia
+const LABEL_DEPTH = 1000001;
 
 function tintFor(reward: PickupReward): number {
   switch (reward.kind) {
@@ -122,23 +134,12 @@ export class WorldScene extends Phaser.Scene {
     const worldHeight = rows * TILE_SIZE;
 
     const walls = this.physics.add.staticGroup();
-
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        const def = TILE_DEFS[map.tiles[r].charAt(c)];
-        const x = c * TILE_SIZE;
-        const y = r * TILE_SIZE;
-        if (def.solid) {
-          walls.create(x + TILE_SIZE / 2, y + TILE_SIZE / 2, def.key);
-        } else {
-          this.add.image(x, y, def.key).setOrigin(0, 0);
-        }
-      }
-    }
+    this.buildTiles(walls);
 
     const spawn = map.spawns.find((s) => s.id === this.spawnId);
     if (!spawn) throw new Error(`Spawn "${this.spawnId}" tidak ada di peta "${map.id}"`);
 
+    // Fisika tetap berjalan di ruang dunia (grid persegi); hanya gambarnya isometrik.
     this.physics.world.setBounds(0, 0, worldWidth, worldHeight);
 
     this.player = new Player(
@@ -183,8 +184,10 @@ export class WorldScene extends Phaser.Scene {
     });
 
     const cam = this.cameras.main;
-    cam.setBounds(0, 0, worldWidth, worldHeight);
-    cam.startFollow(this.player, true, 0.15, 0.15);
+    const bounds = isoBounds(cols, rows, CAMERA_TOP_PADDING);
+    cam.setBounds(bounds.x, bounds.y, bounds.width, bounds.height);
+    cam.centerOn(this.player.view.image.x, this.player.view.image.y);
+    cam.startFollow(this.player.view.image, true, 0.15, 0.15);
     cam.roundPixels = true;
     cam.setBackgroundColor(Colors.background);
     cam.fadeIn(FADE_MS, 11, 8, 32);
@@ -196,7 +199,7 @@ export class WorldScene extends Phaser.Scene {
         color: '#fff3b0',
       })
       .setScrollFactor(0)
-      .setDepth(100);
+      .setDepth(LABEL_DEPTH);
   }
 
   update(): void {
@@ -225,6 +228,56 @@ export class WorldScene extends Phaser.Scene {
     if (this.transitioning) return;
 
     this.updateInteractPrompt();
+  }
+
+  // Menggambar semua tile sebagai berlian, blok, atau benda tegak, dan membuat
+  // badan tabrakan tak terlihat untuk tile padat (di ruang dunia).
+  private buildTiles(walls: Phaser.Physics.Arcade.StaticGroup): void {
+    const map = this.mapData;
+    const rows = map.tiles.length;
+    const cols = map.tiles[0].length;
+
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const def = TILE_DEFS[map.tiles[r].charAt(c)];
+        const info = isoTileInfo(def);
+        const corner = project(c * TILE_SIZE, r * TILE_SIZE);
+        const centerX = c * TILE_SIZE + TILE_SIZE / 2;
+        const centerY = r * TILE_SIZE + TILE_SIZE / 2;
+        const depth = depthOf(centerX, centerY);
+
+        switch (info.kind) {
+          case 'flat':
+            this.add.image(corner.x, corner.y, info.texture).setOrigin(0.5, 0).setDepth(GROUND_DEPTH);
+            break;
+          case 'block':
+            this.add
+              .image(corner.x, corner.y - info.height, info.texture)
+              .setOrigin(0.5, 0)
+              .setDepth(depth);
+            break;
+          case 'prop':
+            if (info.groundTexture) {
+              this.add
+                .image(corner.x, corner.y, info.groundTexture)
+                .setOrigin(0.5, 0)
+                .setDepth(GROUND_DEPTH);
+            }
+            this.add
+              .image(corner.x, corner.y + ISO_TILE_H / 2 + 4, info.texture)
+              .setOrigin(0.5, 1)
+              .setDepth(depth);
+            break;
+        }
+
+        if (def.solid) {
+          const wall = walls.create(centerX, centerY, BLANK_TEXTURE) as Phaser.Physics.Arcade.Sprite;
+          wall.setDisplaySize(TILE_SIZE, TILE_SIZE);
+          wall.refreshBody();
+          wall.setVisible(false);
+        }
+      }
+    }
   }
 
   private consumeAttackKeys(): boolean {
@@ -290,6 +343,7 @@ export class WorldScene extends Phaser.Scene {
     if (now < this.attackReadyAt) return;
     this.attackReadyAt = now + PLAYER_ATTACK_COOLDOWN_MS;
 
+    // Area pukulan dihitung di ruang dunia, di depan arah hadap Nara.
     const body = this.player.body as Phaser.Physics.Arcade.Body;
     const cx = body.center.x + this.player.facing.x * PLAYER_ATTACK_RANGE;
     const cy = body.center.y + this.player.facing.y * PLAYER_ATTACK_RANGE;
@@ -302,7 +356,7 @@ export class WorldScene extends Phaser.Scene {
       if (dist > PLAYER_ATTACK_RADIUS + MONSTER_HIT_PADDING) continue;
 
       const damage = calculateDamage(attack, m.def.defense, PLAYER_ATTACK_POWER);
-      this.floatText(m.x, m.y - 10, String(damage), '#ffffff');
+      this.floatText(m.x, m.y, String(damage), '#ffffff', 16);
       if (m.takeHit(damage, this.player.x, this.player.y, now)) this.killMonster(m);
     }
   }
@@ -336,7 +390,7 @@ export class WorldScene extends Phaser.Scene {
 
   private hitPlayer(monster: Monster): void {
     const damage = calculateDamage(monster.def.attack, character.getStats().defense);
-    this.floatText(this.player.x, this.player.y - 12, `-${damage}`, '#ff8a7a');
+    this.floatText(this.player.x, this.player.y, `-${damage}`, '#ff8a7a', 22);
     this.player.hurt(monster.x, monster.y);
     if (character.takeDamage(damage)) this.handleDefeat();
   }
@@ -380,9 +434,19 @@ export class WorldScene extends Phaser.Scene {
     }
   }
 
-  // Lingkaran cahaya singkat di area pukulan.
-  private slashEffect(x: number, y: number): void {
-    const ring = this.add.circle(x, y, PLAYER_ATTACK_RADIUS, 0xfff3b0, 0.45).setDepth(100000);
+  // Elips cahaya singkat di area pukulan (lingkaran di dunia = elips di layar).
+  private slashEffect(wx: number, wy: number): void {
+    const p = project(wx, wy);
+    const ring = this.add
+      .ellipse(
+        p.x,
+        p.y - 4,
+        PLAYER_ATTACK_RADIUS * Math.SQRT2,
+        PLAYER_ATTACK_RADIUS * Math.SQRT1_2,
+        0xfff3b0,
+        0.45,
+      )
+      .setDepth(EFFECT_DEPTH);
     this.tweens.add({
       targets: ring,
       alpha: 0,
@@ -395,8 +459,9 @@ export class WorldScene extends Phaser.Scene {
   }
 
   // Kepulan kecil saat monster atau boss kalah.
-  private puffEffect(x: number, y: number, color: number): void {
-    const puff = this.add.circle(x, y, 8, color, 0.8).setDepth(100000);
+  private puffEffect(wx: number, wy: number, color: number): void {
+    const p = project(wx, wy);
+    const puff = this.add.circle(p.x, p.y - 6, 8, color, 0.8).setDepth(EFFECT_DEPTH);
     this.tweens.add({
       targets: puff,
       alpha: 0,
@@ -408,12 +473,15 @@ export class WorldScene extends Phaser.Scene {
     });
   }
 
-  // Teks angka melayang naik lalu hilang.
-  private floatText(x: number, y: number, text: string, color: string): void {
+  // Teks angka melayang naik lalu hilang. Posisi diberikan di ruang dunia;
+  // lift = seberapa tinggi di atas titik pijak (piksel layar).
+  private floatText(wx: number, wy: number, text: string, color: string, lift = 18): void {
+    const p = project(wx, wy);
+    const y = p.y - lift;
     const label = this.add
-      .text(x, y, text, { fontFamily: 'monospace', fontSize: '8px', color })
+      .text(p.x, y, text, { fontFamily: 'monospace', fontSize: '8px', color })
       .setOrigin(0.5, 1)
-      .setDepth(100000);
+      .setDepth(EFFECT_DEPTH);
     this.tweens.add({
       targets: label,
       y: y - 14,
@@ -475,42 +543,57 @@ export class WorldScene extends Phaser.Scene {
   private spawnPickups(): void {
     ensurePickupTexture(this);
     const group = this.physics.add.group({ allowGravity: false });
-    const entries = new Map<Phaser.GameObjects.GameObject, MapPickup>();
+    const entries = new Map<Phaser.GameObjects.GameObject, PickupEntry>();
 
     for (const p of pickupsFor(this.mapData.id)) {
       if (worldFlags.isPickupCollected(this.mapData.id, p.id)) continue;
 
       const x = p.tileX * TILE_SIZE + TILE_SIZE / 2;
       const y = p.tileY * TILE_SIZE + TILE_SIZE / 2;
-      const sprite = group.create(x, y, PICKUP_TEXTURE) as Phaser.Physics.Arcade.Sprite;
-      sprite.setTint(tintFor(p.reward));
-      sprite.setDepth(y);
-      (sprite.body as Phaser.Physics.Arcade.Body).setSize(24, 24, true);
-      entries.set(sprite, p);
 
+      // Badan logika (untuk tabrakan) tidak terlihat; yang terlihat permata
+      // melayang dan bayangannya di posisi hasil proyeksi.
+      const sprite = group.create(x, y, PICKUP_TEXTURE) as Phaser.Physics.Arcade.Sprite;
+      sprite.setVisible(false);
+      (sprite.body as Phaser.Physics.Arcade.Body).setSize(24, 24, true);
+
+      const pt = project(x, y);
+      const depth = depthOf(x, y);
+      const shadow = this.add
+        .image(pt.x, pt.y + 1, SHADOW_TEXTURE)
+        .setScale(0.7)
+        .setDepth(depth);
+      const gem = this.add
+        .image(pt.x, pt.y - 2, PICKUP_TEXTURE)
+        .setOrigin(0.5, 1)
+        .setTint(tintFor(p.reward))
+        .setDepth(depth + 1);
       this.tweens.add({
-        targets: sprite,
-        y: y - 3,
+        targets: gem,
+        y: gem.y - 3,
         duration: 600,
         yoyo: true,
         repeat: -1,
         ease: 'Sine.easeInOut',
       });
+      entries.set(sprite, { pickup: p, gem, shadow });
     }
 
     this.physics.add.overlap(this.player, group, (_player, obj) => {
       if (this.time.now < this.pickupBlockedUntil) return;
       const sprite = obj as Phaser.Physics.Arcade.Sprite;
-      const pickup = entries.get(sprite);
-      if (!pickup) return;
+      const entry = entries.get(sprite);
+      if (!entry) return;
 
-      if (!grantReward(pickup.reward)) {
+      if (!grantReward(entry.pickup.reward)) {
         this.pickupBlockedUntil = this.time.now + FULL_TOAST_COOLDOWN_MS;
         return;
       }
-      worldFlags.collectPickup(this.mapData.id, pickup.id);
+      worldFlags.collectPickup(this.mapData.id, entry.pickup.id);
       entries.delete(sprite);
-      this.tweens.killTweensOf(sprite);
+      this.tweens.killTweensOf(entry.gem);
+      entry.gem.destroy();
+      entry.shadow.destroy();
       sprite.destroy();
     });
   }
