@@ -17,6 +17,8 @@ import { installRegions } from '@/data/regions/install';
 import { installErrorOverlay } from '@/ui/errorOverlay';
 
 let game: Phaser.Game | null = null;
+installErrorOverlay();
+installRegions();
 initInstall();
 registerServiceWorker();
 
