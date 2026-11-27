@@ -2,22 +2,27 @@ import Phaser from 'phaser';
 import { TILE_SIZE } from '@/config/constants';
 import { KNOCKBACK_MS, KNOCKBACK_SPEED } from '@/data/combat';
 import type { MonsterDef, MonsterSpawn } from '@/data/monsters';
+import { ISO_MONSTER_SPEED_SCALE } from '@/world/iso';
+import { IsoView } from '@/world/IsoView';
 import { MONSTER_TEXTURE } from '@/world/monsterTexture';
 
 const HIT_FLASH_MS = 100;
 const FIRST_ATTACK_DELAY_MS = 800;
 const BAR_WIDTH = 14;
 const BAR_HEIGHT = 3;
-const BAR_OFFSET_Y = 11;
+const BAR_GAP = 3; // jarak bar HP di atas kepala
 
 // Monster sederhana: diam sampai Nara mendekat, lalu mengejar dan menyerang
-// bila sudah dekat. Teksturnya dibuat lebih dulu lewat ensureMonsterTexture().
+// bila sudah dekat. Sprite ini adalah badan logika di ruang dunia (tidak
+// terlihat); yang terlihat adalah this.view. Teksturnya dibuat lebih dulu
+// lewat ensureMonsterTexture().
 export class Monster extends Phaser.Physics.Arcade.Sprite {
   readonly def: MonsterDef;
   readonly spawnId: string;
   hp: number;
   private nextAttackAt: number;
   private stunnedUntil = 0;
+  private readonly view: IsoView;
   private readonly barBg: Phaser.GameObjects.Rectangle;
   private readonly barFill: Phaser.GameObjects.Rectangle;
 
@@ -34,27 +39,24 @@ export class Monster extends Phaser.Physics.Arcade.Sprite {
     scene.physics.add.existing(this);
     this.setTint(def.tint);
     this.setCollideWorldBounds(true);
+    this.setVisible(false);
 
     const body = this.body as Phaser.Physics.Arcade.Body;
     body.setSize(12, 10);
     body.setOffset(1, 2);
     body.pushable = false;
 
-    this.barBg = scene.add
-      .rectangle(x, y - BAR_OFFSET_Y, BAR_WIDTH, BAR_HEIGHT, 0x1a1236)
-      .setOrigin(0.5, 0.5)
-      .setVisible(false);
+    this.view = new IsoView(scene, this);
+    this.barBg = scene.add.rectangle(0, 0, BAR_WIDTH, BAR_HEIGHT, 0x1a1236).setVisible(false);
     this.barFill = scene.add
-      .rectangle(x - BAR_WIDTH / 2, y - BAR_OFFSET_Y, BAR_WIDTH, BAR_HEIGHT, 0xe0735a)
+      .rectangle(0, 0, BAR_WIDTH, BAR_HEIGHT, 0xe0735a)
       .setOrigin(0, 0.5)
       .setVisible(false);
-    this.syncDepth();
+    this.placeBars();
   }
 
   // Dipanggil tiap frame. Mengembalikan true bila monster menyerang saat ini.
   think(target: Phaser.GameObjects.Sprite, now: number, canHit: boolean): boolean {
-    this.syncBar();
-    this.syncDepth();
     if (now < this.stunnedUntil) return false;
 
     const mine = (this.body as Phaser.Physics.Arcade.Body).center;
@@ -71,7 +73,7 @@ export class Monster extends Phaser.Physics.Arcade.Sprite {
     }
 
     if (dist <= this.def.aggroRadius) {
-      this.scene.physics.moveToObject(this, target, this.def.speed);
+      this.scene.physics.moveToObject(this, target, this.def.speed * ISO_MONSTER_SPEED_SCALE);
     } else {
       this.setVelocity(0, 0);
     }
@@ -102,20 +104,25 @@ export class Monster extends Phaser.Physics.Arcade.Sprite {
     return this.hp <= 0;
   }
 
+  override preUpdate(time: number, delta: number): void {
+    super.preUpdate(time, delta);
+    this.view.sync();
+    this.placeBars();
+  }
+
   override destroy(fromScene?: boolean): void {
+    this.view.destroy();
     this.barBg.destroy();
     this.barFill.destroy();
     super.destroy(fromScene);
   }
 
-  private syncBar(): void {
-    this.barBg.setPosition(this.x, this.y - BAR_OFFSET_Y);
-    this.barFill.setPosition(this.x - BAR_WIDTH / 2, this.y - BAR_OFFSET_Y);
-  }
-
-  private syncDepth(): void {
-    this.setDepth(this.y);
-    this.barBg.setDepth(this.y + 1);
-    this.barFill.setDepth(this.y + 2);
+  // Bar HP ditaruh di atas kepala gambar isometrik.
+  private placeBars(): void {
+    const x = this.view.image.x;
+    const y = this.view.top - BAR_GAP;
+    const depth = this.view.image.depth;
+    this.barBg.setPosition(x, y).setDepth(depth + 1);
+    this.barFill.setPosition(x - BAR_WIDTH / 2, y).setDepth(depth + 2);
   }
 }

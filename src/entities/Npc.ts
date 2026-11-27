@@ -1,12 +1,16 @@
 import Phaser from 'phaser';
 import { TILE_SIZE } from '@/config/constants';
 import type { NpcDef } from '@/data/npcs';
+import { IsoView } from '@/world/IsoView';
 import { NPC_TEXTURE } from '@/world/npcTexture';
 
-// NPC diam di tempat dan menjadi penghalang. Teksturnya dibuat lebih dulu
-// lewat ensureNpcTexture() sebelum kelas ini dibuat.
+// NPC diam di tempat dan menjadi penghalang. Sprite ini adalah badan logika
+// di ruang dunia (tidak terlihat); yang terlihat adalah this.view. Teksturnya
+// dibuat lebih dulu lewat ensureNpcTexture() sebelum kelas ini dibuat.
 export class Npc extends Phaser.Physics.Arcade.Sprite {
   readonly def: NpcDef;
+  private readonly view: IsoView;
+  private readonly label: Phaser.GameObjects.Text;
 
   constructor(scene: Phaser.Scene, def: NpcDef) {
     const x = def.tileX * TILE_SIZE + TILE_SIZE / 2;
@@ -17,15 +21,22 @@ export class Npc extends Phaser.Physics.Arcade.Sprite {
     scene.add.existing(this);
     scene.physics.add.existing(this, true); // true = badan statis
     this.setTint(def.tint);
-    this.setDepth(y);
+    this.setVisible(false);
 
-    scene.add
-      .text(x, y - 14, def.name, {
+    this.view = new IsoView(scene, this);
+    this.label = scene.add
+      .text(this.view.image.x, this.view.top - 1, def.name, {
         fontFamily: 'monospace',
         fontSize: '8px',
         color: '#fff3b0',
       })
       .setOrigin(0.5, 1)
-      .setDepth(y + 1);
+      .setDepth(this.view.image.depth + 1);
+  }
+
+  override destroy(fromScene?: boolean): void {
+    this.view.destroy();
+    this.label.destroy();
+    super.destroy(fromScene);
   }
 }
