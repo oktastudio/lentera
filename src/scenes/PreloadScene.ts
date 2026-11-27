@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { Colors, SceneKeys, TextureKeys, TILE_SIZE } from '@/config/constants';
 import { TILE_DEFS } from '@/world/tiles';
-
+import { REGION_TILE_PAINTERS } from '@/world/regionTiles';
 type Painter = (g: Phaser.GameObjects.Graphics) => void;
 
 const S = TILE_SIZE;
@@ -81,6 +81,9 @@ export class PreloadScene extends Phaser.Scene {
   create(): void {
     this.createNara();
     for (const [key, paint] of Object.entries(TILE_PAINTERS)) {
+      this.makeTexture(key, S, S, paint);
+    }
+        for (const [key, paint] of Object.entries(REGION_TILE_PAINTERS)) {
       this.makeTexture(key, S, S, paint);
     }
     this.verifyTiles();
