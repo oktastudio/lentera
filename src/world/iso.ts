@@ -7,7 +7,12 @@ import { TILE_SIZE } from '@/config/constants';
 export const ISO_TILE_W = 32; // lebar berlian satu sel di layar
 export const ISO_TILE_H = 16; // tinggi berlian satu sel di layar
 export const ISO_DEFAULT_BLOCK_HEIGHT = 20; // tinggi blok padat (gedung, dll)
-export const ISO_MOVE_SCALE = 1.5; // pengali kecepatan gerak agar terasa pas di layar iso
+
+// Kecepatan Nara di layar = PLAYER_SPEED x faktor ini (sama ke segala arah).
+export const ISO_PLAYER_SPEED_FACTOR = 0.75;
+// Monster bergerak di ruang dunia, jadi kecepatannya dikali ini supaya
+// perbandingannya dengan Nara tetap seperti sebelum isometrik.
+export const ISO_MONSTER_SPEED_SCALE = 1.5;
 
 const A = ISO_TILE_W / 2 / TILE_SIZE; // pengali sumbu x layar
 const B = ISO_TILE_H / 2 / TILE_SIZE; // pengali sumbu y layar
@@ -30,9 +35,16 @@ export function depthOf(x: number, y: number): number {
   return x + y;
 }
 
-// Arah di layar (kanan = +x, bawah = +y, panjang maksimal 1) -> arah di ruang
-// dunia dengan panjang yang sama. Dipakai agar joystick "atas" benar-benar
-// berarti atas di layar.
+// Kecepatan di layar (kanan = +x, bawah = +y) -> kecepatan di ruang dunia yang
+// menghasilkan gerak persis itu di layar.
+export function screenToWorldVelocity(sx: number, sy: number, out: Point = { x: 0, y: 0 }): Point {
+  out.x = (sx / A + sy / B) / 2;
+  out.y = (sy / B - sx / A) / 2;
+  return out;
+}
+
+// Arah di layar -> arah di ruang dunia, panjang disamakan dengan arah asal
+// (0 bila tidak ada arah). Dipakai untuk arah hadap dan serangan.
 export function screenToWorldDir(sx: number, sy: number, out: Point = { x: 0, y: 0 }): Point {
   const m = Math.hypot(sx, sy);
   if (m === 0) {
@@ -40,11 +52,10 @@ export function screenToWorldDir(sx: number, sy: number, out: Point = { x: 0, y:
     out.y = 0;
     return out;
   }
-  const wx = (sx / A + sy / B) / 2;
-  const wy = (sy / B - sx / A) / 2;
-  const scale = m / Math.hypot(wx, wy);
-  out.x = wx * scale;
-  out.y = wy * scale;
+  screenToWorldVelocity(sx, sy, out);
+  const scale = m / Math.hypot(out.x, out.y);
+  out.x *= scale;
+  out.y *= scale;
   return out;
 }
 
