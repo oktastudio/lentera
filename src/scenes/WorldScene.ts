@@ -29,6 +29,7 @@ import { gameBus } from '@/systems/EventBus';
 import { InputSystem } from '@/systems/InputSystem';
 import { grantReward } from '@/systems/Rewards';
 import { worldFlags } from '@/systems/WorldFlags';
+import { addLampGlow, Atmosphere } from '@/world/Atmosphere';
 import { depthOf, ISO_TILE_H, isoBounds, project } from '@/world/iso';
 import { BLANK_TEXTURE, isoTileInfo, SHADOW_TEXTURE } from '@/world/isoTextures';
 import { ensureMonsterTexture } from '@/world/monsterTexture';
@@ -75,6 +76,13 @@ function tintFor(reward: PickupReward): number {
   }
 }
 
+// Variasi kecerahan kecil per tile supaya lantai tidak tampak rata satu warna.
+function shadeFor(c: number, r: number): number {
+  const h = ((c * 73856093) ^ (r * 19349663)) >>> 0;
+  const v = 0xff - (h % 5) * 5;
+  return (v << 16) | (v << 8) | v;
+}
+
 function targetKey(t: InteractTarget | null): string | null {
   if (!t) return null;
   return t.kind === 'npc' ? `npc:${t.npc.def.id}` : `boss:${t.boss.spawnId}`;
@@ -83,6 +91,7 @@ function targetKey(t: InteractTarget | null): string | null {
 export class WorldScene extends Phaser.Scene {
   private player!: Player;
   private inputSystem!: InputSystem;
+  private atmosphere!: Atmosphere;
   private mapData!: MapData;
   private spawnId = START_SPAWN_ID;
   private transitioning = false;
@@ -155,6 +164,7 @@ export class WorldScene extends Phaser.Scene {
     this.spawnPickups();
 
     this.inputSystem = new InputSystem(this);
+    this.atmosphere = new Atmosphere(this, this.player.view.image);
 
     // Keyboard untuk desktop: Spasi atau Z untuk menyerang.
     const keyboard = this.input.keyboard;
@@ -198,12 +208,14 @@ export class WorldScene extends Phaser.Scene {
         fontSize: '8px',
         color: '#fff3b0',
       })
+      .setStroke('#0b0820', 2)
       .setScrollFactor(0)
       .setDepth(LABEL_DEPTH);
   }
 
   update(): void {
     const attackPressed = this.consumeAttackKeys();
+    this.atmosphere.update(this.time.now);
     if (this.transitioning) return;
 
     // Nara dan monster diam selama dialog atau pertarungan giliran berlangsung.
@@ -246,14 +258,21 @@ export class WorldScene extends Phaser.Scene {
         const centerY = r * TILE_SIZE + TILE_SIZE / 2;
         const depth = depthOf(centerX, centerY);
 
+        const shade = shadeFor(c, r);
+
         switch (info.kind) {
           case 'flat':
-            this.add.image(corner.x, corner.y, info.texture).setOrigin(0.5, 0).setDepth(GROUND_DEPTH);
+            this.add
+              .image(corner.x, corner.y, info.texture)
+              .setOrigin(0.5, 0)
+              .setTint(shade)
+              .setDepth(GROUND_DEPTH);
             break;
           case 'block':
             this.add
               .image(corner.x, corner.y - info.height, info.texture)
               .setOrigin(0.5, 0)
+              .setTint(shade)
               .setDepth(depth);
             break;
           case 'prop':
@@ -261,12 +280,15 @@ export class WorldScene extends Phaser.Scene {
               this.add
                 .image(corner.x, corner.y, info.groundTexture)
                 .setOrigin(0.5, 0)
+                .setTint(shade)
                 .setDepth(GROUND_DEPTH);
             }
             this.add
               .image(corner.x, corner.y + ISO_TILE_H / 2 + 4, info.texture)
               .setOrigin(0.5, 1)
               .setDepth(depth);
+            // Semua benda berdiri saat ini adalah lampu: beri cahaya di bohlamnya.
+            addLampGlow(this, corner.x, corner.y + ISO_TILE_H / 2 - 1, depth + 2);
             break;
         }
 
@@ -385,6 +407,7 @@ export class WorldScene extends Phaser.Scene {
     character.addExp(def.expReward);
 
     this.puffEffect(m.x, m.y, def.tint);
+    this.cameras.main.shake(60, 0.002);
     m.destroy();
   }
 
@@ -392,6 +415,7 @@ export class WorldScene extends Phaser.Scene {
     const damage = calculateDamage(monster.def.attack, character.getStats().defense);
     this.floatText(this.player.x, this.player.y, `-${damage}`, '#ff8a7a', 22);
     this.player.hurt(monster.x, monster.y);
+    this.cameras.main.shake(90, 0.004);
     if (character.takeDamage(damage)) this.handleDefeat();
   }
 
@@ -480,6 +504,7 @@ export class WorldScene extends Phaser.Scene {
     const y = p.y - lift;
     const label = this.add
       .text(p.x, y, text, { fontFamily: 'monospace', fontSize: '8px', color })
+      .setStroke('#0b0820', 2)
       .setOrigin(0.5, 1)
       .setDepth(EFFECT_DEPTH);
     this.tweens.add({
