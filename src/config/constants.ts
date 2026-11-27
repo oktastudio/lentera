@@ -1,7 +1,7 @@
 // Konstanta global LENTERA. Satu-satunya tempat angka dasar didefinisikan.
 
-export const GAME_WIDTH = 320;
-export const GAME_HEIGHT = 180;
+export const GAME_WIDTH = 480;
+export const GAME_HEIGHT = 270;
 export const TILE_SIZE = 32;
 
 export const PLAYER_SPEED = 80; // piksel per detik
