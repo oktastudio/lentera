@@ -34,8 +34,14 @@ export class BossActor extends Phaser.Physics.Arcade.Sprite {
         fontSize: '8px',
         color: '#ffc857',
       })
+      .setStroke('#0b0820', 2)
       .setOrigin(0.5, 1)
       .setDepth(this.view.image.depth + 1);
+  }
+
+  override preUpdate(time: number, delta: number): void {
+    super.preUpdate(time, delta);
+    this.view.sync(); // agar gambar tetap "bernapas"
   }
 
   override destroy(fromScene?: boolean): void {
